@@ -1,0 +1,138 @@
+---
+title: "Can VSOA be predicted from local clustering?"
+author: "Chris Cox"
+date: "2023-08-30"
+output: html_document
+---
+
+```{r configure knitr, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Abstract
+In the primary analysis, we observed changes in the network structure of vocabularies as they grow and noted differences in these trajectories by group (autistic/non-autistic). This must be driven by the fact that words 
+
+# Load data and setup
+The data being considered are word-level clustering coeffients (CC), computed with
+respect to the full network of 675 words and word-by-group-level vocabulary
+sizes of acquisition (VSOA) scores. The two datasets need to be merged. I then
+apply a filter to remove cases where the VSOA falls outside a range: the
+smallest possible vocabulary size is 1. The largest vocabulary size we can speak
+to given our data is 675. Because VSOA is estimated based on a linear model,
+words that are produced in nearly all over the smallest vocabularies we have in
+the dataset may have an estimated VSOA $\ll 0$. One the other hand, words that
+are rarely produced in even the largest vocabularies may have a VSOA  $\gg 675$.
+These are not ideal cases for observing change over development/vocabulary
+growth, because the production of these words does not vary in much in the child
+sample we are looking at. Thus, they are excluded from these analyses.
+```{r setup}
+library(dplyr)
+library(purrr)
+library(tidyr)
+library(ggplot2)
+
+clust <- readRDS("data/local_clust.rds")
+vsoa <- readRDS("data/item_level_differences_bs_ci_bonf.rds")
+
+# Limit to words with VSOAs between 0 and 675 and compute z-score
+d_wide <- left_join(clust, vsoa %>% select(-word, -fct), by = "num_item_id") %>%
+    rename(vsoa_asd = asd, vsoa_na = na, vsoa_diff = diff) %>%
+    filter(
+        vsoa_na > 0,
+        vsoa_na <= 675,
+        vsoa_asd > 0,
+        vsoa_na <= 675
+    ) %>%
+    mutate(
+        local_clust_z = (local_clust - mean(local_clust)) / sd(local_clust),
+        vsoa_asd_z = (vsoa_asd - mean(vsoa_asd)) / sd(vsoa_asd),
+        vsoa_na_z = (vsoa_na - mean(vsoa_na)) / sd(vsoa_na),
+        vsoa_diff_z = (vsoa_diff - mean(vsoa_diff)) / sd(vsoa_diff)
+    )
+
+
+# Pivot longer
+d_long <- d_wide %>%
+    pivot_longer(
+        cols = c(vsoa_na, vsoa_asd),
+        names_to = "group",
+        values_to = "vsoa"
+    ) %>%
+    mutate(
+        group = factor(
+            group,
+            levels = c("vsoa_asd", "vsoa_na"),
+            labels = c("non-autistic", "autistic")
+        ),
+        vsoa_z = (vsoa - mean(vsoa)) / sd(vsoa)
+    ) %>%
+    group_by(group) %>%
+    mutate(
+        vsoa_zz = (vsoa - mean(vsoa)) / sd(vsoa)
+    )
+```
+
+# Visualizing the relationship between CC and VSOA
+The strength of the correlation between these variables may not be constant. By
+fitting a GAM model or loess models, we can  observe the strength of the
+relationship at different values of the clustering coefficient.
+
+We can follow up on these descriptive plots using correlation and linear models.
+
+## Relationship between CC and VSOA by group 
+First, we consider each group separately. The relationship looks similar for
+each.
+```{r GAM or loess: by group}
+ggplot(d_long, aes(x = local_clust, y = vsoa, color = group)) +
+    geom_point() +
+    geom_smooth() +
+    ggtitle("Non-linear Model")
+```
+
+We can test for the existence of linear relationships over this range. Pairwise
+correlations are significant for each group.
+
+```{r Pearson correlation by group}
+map(split(d_long, d_long$group), ~{cor.test(.$vsoa, .$local_clust)})
+```
+
+The difference in slope between groups can be tested in a linear model. No group
+differences exist.
+
+```{r linear model by group}
+m_raw <- lm(vsoa ~ local_clust * group, data = d_long)
+summary(m_raw)
+```
+
+The model can be refit with standardized variables to obtain model standardized model coefficients, which can be interpreted as "how many standard deviations will the dependent variable change is the independent variable is changed by one standard deviation?".
+```{r linear model group (standardized)}
+m_std <- lm(vsoa_z ~ local_clust_z * group, data = d_long)
+summary(m_std)
+```
+
+The linear model predictions can be visualized, confirming the similarity
+between groups.
+```{r linear model group plot}
+ggplot(d_long, aes(x = local_clust, y = vsoa, color = group)) +
+    geom_point() +
+    geom_smooth(method = "lm") +
+    ggtitle("Linear Model")
+```
+
+
+## Relationship between CC and item-level VSOA group differences
+Next, we consider if local clustering relates to the magnitude for the
+difference in VSOA estimated for the same word between groups. There appears to
+be no relationship.
+
+```{r GAM or loess: diff}
+ggplot(d_wide, aes(x = local_clust, y = vsoa_diff)) +
+    geom_point() +
+    geom_smooth()
+
+```
+
+The correlation between variables is not significant.
+```{r}
+cor.test(~ vsoa_diff + local_clust, data = d_wide)
+```
+
