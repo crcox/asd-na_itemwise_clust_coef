@@ -103,7 +103,11 @@ ggplot(ddd, aes(x = vocab_size, y = local_clust)) +
     geom_line(aes(color = category)) +
     facet_wrap(~group)
 
+ggsave("local_clust_by_vocab_size_by_category.png")
+
 ggplot(ddd, aes(x = vocab_size, y = local_clust)) +
     geom_ribbon(aes(ymin = local_clust - local_clust_se, ymax = local_clust + local_clust_se, fill = group), alpha = .3) +
     geom_line(aes(color = group)) +
     facet_wrap(~category)
+
+ggsave("local_clust_by_vocab_size_by_group.png")
