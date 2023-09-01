@@ -4,7 +4,7 @@ library(igraph)
 load("data/clust_local_global.Rdata")
 m <- readRDS("data/cdi-metadata.rds")
 
-g <- igraph::upgrade_graph(readRDS("data/child_net_graph.rds"))
+g <- igraph::upgrade_graph(readRDS("network/child_net_graph.rds"))
 global_clust <- igraph::transitivity(g, type = "global")
 global_clust - clust$V1
 local_clust <- igraph::transitivity(g, type = "local")
